@@ -4,35 +4,43 @@ Pipeline: grayscale → Gaussian blur → optional sharpen → adaptive threshol
 """
 
 from __future__ import annotations
+# Python 3 feature that changes how type hints are handled. Here it lets you write things like np.ndarray | None (meaning “either an array or None”) without quoting them. On older Python you might write Optional[np.ndarray] instead.
 
-import cv2
-import numpy as np
-import streamlit as st
+import cv2  # OpenCV: read/decode images, color conversion, blur, threshold
+import numpy as np  # N-dimensional arrays; OpenCV images are these arrays.
+import streamlit as st  # Builds the web UI (title, sliders, file upload, images).
 
 
-def _odd_kernel(n: int) -> int:
+def _odd_kernel(
+    n: int,
+) -> int:
     n = int(n)
     if n < 1:
         return 1
-    return n if n % 2 == 1 else n + 1
+    return (
+        n if n % 2 == 1 else n + 1
+    )  # forces a positive odd integer. Many OpenCV filters need an odd kernel size (e.g. 3×3, 5×5) so there is a clear center pixel.
 
 
 def _odd_block(n: int) -> int:
     n = _odd_kernel(n)
-    return max(3, min(n, 99))
+    return max(
+        3, min(n, 99)
+    )  # clamps between 3 and 99 with max / min, because adaptiveThreshold expects a block size in a sensible range
 
 
+# Core pipeline: process_document
 def process_document(
-    bgr: np.ndarray,
+    bgr: np.ndarray,  # Color image as a NumPy array. OpenCV uses BGR order (blue, green, red), not RGB.
     blur_kernel: int,
     block_size: int,
     thresh_c: float,
     sharpen: float,
 ) -> np.ndarray:
     """Return single-channel scan-like image (uint8, 0–255)."""
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)  # Grayscale
     k = _odd_kernel(blur_kernel)
-    blurred = cv2.GaussianBlur(gray, (k, k), 0)
+    blurred = cv2.GaussianBlur(gray, (k, k), 0)  # reduces noise; larger k smooths more
 
     if sharpen > 0:
         sigma = 1.0 + sharpen * 2.0
@@ -53,15 +61,19 @@ def process_document(
         bs,
         c,
     )
-    return out
+    return out  # A 2D array, grayscale but really binary-looking (mostly black and white) after thresholding
 
 
+# Turning an upload into an image: decode_upload
 def decode_upload(file_bytes: bytes) -> np.ndarray | None:
     arr = np.frombuffer(file_bytes, dtype=np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    img = cv2.imdecode(
+        arr, cv2.IMREAD_COLOR
+    )  # decodes PNG/JPEG/etc. from that buffer into a BGR image. The UI checks that in main.
     return img
 
 
+# The Streamlit app: main
 def main() -> None:
     st.set_page_config(
         page_title="Document Scanner & Enhancer",
